@@ -28,9 +28,13 @@ extension BridgeDesktopUIStateBuilder {
       directApprovalMode: model.directApprovalMode,
       directApprovalOptions: modeOptions(
         current: model.directApprovalMode,
-        values: ["require", "auto"],
-        titles: ["require": "每次需要批准", "auto": "自动批准"]
+        values: ["require", "auto", "full-access"],
+        titles: ["require": "每次询问", "auto": "自动", "full-access": "完全访问"]
       ),
+      directFullAccessProjectID: model.directFullAccessProjectID,
+      directFullAccessProjectOptions: model.projects.filter {
+        $0.capabilities.read == "allowed" && $0.capabilities.write == "allowed"
+      }.map { BridgeDesktopChoice(id: $0.projectID, title: $0.name) },
       taskStartApprovalMode: model.taskStartApprovalMode,
       taskStartApprovalOptions: modeOptions(
         current: model.taskStartApprovalMode,

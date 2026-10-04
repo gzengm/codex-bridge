@@ -45,10 +45,29 @@ extension BridgeServiceApplication {
 
   public func serviceSetDirectApprovalMode(
     _ mode: ServiceDirectApprovalMode,
+    projectID: String? = nil,
+    confirmed: Bool = false,
     deadline: ContinuousClock.Instant
   ) async throws {
     try Self.checkDeadline(deadline)
-    try await settings.setDirectApprovalMode(mode)
+    let project: ServiceProjectRecord?
+    if mode == .fullAccess {
+      guard let projectID, confirmed else {
+        throw BridgeMCPQueryError.contractRejected
+      }
+      project = try await applyingDirectConfiguration(to: writableProject(projectID))
+    } else {
+      project = nil
+    }
+    try await settings.setDirectApprovalMode(
+      mode, fullAccessProject: project, confirmed: confirmed)
+  }
+
+  public func serviceDirectApprovalConfiguration(
+    deadline: ContinuousClock.Instant
+  ) async throws -> ServiceDirectApprovalConfiguration {
+    try Self.checkDeadline(deadline)
+    return try await settings.directApprovalConfiguration()
   }
 
   public func serviceTaskStartApprovalMode(
@@ -88,17 +107,28 @@ extension BridgeServiceApplication {
     return await approvals.deny(approvalID: approvalID)
   }
 
+  @discardableResult
   func requireDirectApproval(
     project: ServiceProjectRecord,
     kind: DirectApprovalKind,
     summary: String,
     payload: some Encodable,
-    clientRequestID: String?
-  ) async throws {
-    if try await settings.directApprovalMode() == .auto { return }
+    clientRequestID: String?,
+    fullAccessEligible: Bool = false
+  ) async throws -> Bool {
+    let configuration = try await settings.directApprovalConfiguration()
+    if configuration.mode == .auto { return false }
     let digest = DirectActionApprovalCenter.payloadDigest(payload)
+    if await approvals.denialIsActive(payloadDigest: digest, clientRequestID: clientRequestID) {
+      throw BridgeMCPQueryError.approvalDenied
+    }
+    if fullAccessEligible, kind == .command || kind == .network,
+      configuration.hasFullAccess(for: project)
+    {
+      return true
+    }
     let granted = await approvals.consume(payloadDigest: digest, clientRequestID: clientRequestID)
-    if granted { return }
+    if granted { return false }
     switch await approvals.requestApproval(
       projectID: project.id.rawValue,
       kind: kind,

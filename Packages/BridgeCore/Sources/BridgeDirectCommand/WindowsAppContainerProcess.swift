@@ -78,8 +78,9 @@
       let createProfile = unsafeBitCast(createProfilePtr, to: CreateAppContainerProfileFn.self)
       let deriveSid = unsafeBitCast(deriveSidPtr, to: DeriveAppContainerSidFn.self)
 
+      // 部分 Windows 版本在 50 字符以上拒绝创建；缩短前缀并保留完整 UUID。
       let uniqueName =
-        "CodexBridge.Direct.\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        "CodexBridge.\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
       var sidPointer: PSID?
       let hr = uniqueName.withCString(encodedAs: UTF16.self) { nameW in
         createProfile(nameW, nameW, nameW, nil, 0, &sidPointer)

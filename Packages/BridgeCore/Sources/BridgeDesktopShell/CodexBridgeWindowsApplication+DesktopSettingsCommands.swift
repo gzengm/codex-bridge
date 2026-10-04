@@ -13,7 +13,10 @@
         Task { @MainActor in await auxiliary.settings.saveDirectConfiguration(value) }
       case .setDirectApprovalMode:
         guard let mode = BridgeDesktopCommandValue.nonEmpty(payload.mode) else { return true }
-        Task { @MainActor in await auxiliary.settings.setDirectApprovalMode(mode) }
+        Task { @MainActor in
+          await auxiliary.settings.setDirectApprovalMode(
+            mode, projectID: payload.projectID, confirmed: payload.confirmed == true)
+        }
       case .setTaskStartApprovalMode:
         guard let mode = BridgeDesktopCommandValue.nonEmpty(payload.mode) else { return true }
         Task { @MainActor in await auxiliary.settings.setTaskStartApprovalMode(mode) }

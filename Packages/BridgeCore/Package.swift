@@ -3,7 +3,6 @@
 import Foundation
 import PackageDescription
 
-
 var macOSOnlyProducts: [Product] = []
 var macOSOnlyTargets: [Target] = []
 
@@ -41,10 +40,8 @@ var windowsApplicationLinkerFlags = [
 
 #if os(macOS)
   macOSOnlyProducts = [
-    .library(name: "BridgeServiceAppShell", targets: ["BridgeServiceAppShell"]),
-    
-    
-    
+    .library(name: "BridgeServiceAppShell", targets: ["BridgeServiceAppShell"])
+
   ]
   macOSOnlyTargets = [
     .target(
@@ -56,10 +53,8 @@ var windowsApplicationLinkerFlags = [
         "BridgeMCP",
         "BridgeServiceAppCore",
       ]
-    ),
-    
-    
-    
+    )
+
   ]
 #endif
 
@@ -102,7 +97,7 @@ let package = Package(
       name: "codex-bridge-windows-app",
       targets: ["CodexBridgeWindowsApp"]
     ),
-    
+
   ] + macOSOnlyProducts + linuxOnlyProducts,
   dependencies: [
     // Vendored MCP swift-sdk 0.12.1: upstream excludes the EventSource
@@ -285,6 +280,14 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto"),
       ]
     ),
+    .testTarget(
+      name: "DirectFullAccessTests",
+      dependencies: [
+        "BridgeServiceApplication", "BridgeServiceCore", "BridgeDirectCommand",
+        "BridgeDesktopUI", "BridgeIPC", "BridgeProjects", "BridgeDomain",
+        "BridgeCodexService", "BridgeCodexRPC", "BridgeMCP",
+      ]
+    ),
     .target(name: "BridgeProcess"),
     .target(
       name: "BridgePiRPC",
@@ -372,6 +375,6 @@ let package = Package(
         )
       ]
     ),
-    
+
   ] + macOSOnlyTargets + linuxOnlyTargets
 )

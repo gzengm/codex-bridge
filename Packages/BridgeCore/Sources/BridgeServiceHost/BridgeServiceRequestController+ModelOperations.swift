@@ -157,12 +157,13 @@ extension BridgeServiceRequestController {
   }
 
   func handleGetDirectApprovalMode(_ request: BridgeServiceIPCRequest) async throws -> Data {
-    let mode = try await composition.application.serviceDirectApprovalMode(
+    let configuration = try await composition.application.serviceDirectApprovalConfiguration(
       deadline: Self.deadline()
     )
     return try BridgeServiceIPCCodec.success(
       requestID: request.requestID,
-      payload: IPCDirectApprovalModeResponse(mode: mode.rawValue)
+      payload: IPCDirectApprovalModeResponse(
+        mode: configuration.mode.rawValue, projectID: configuration.fullAccessScope?.projectID)
     )
   }
 
@@ -176,6 +177,8 @@ extension BridgeServiceRequestController {
     }
     try await composition.application.serviceSetDirectApprovalMode(
       mode,
+      projectID: payload.projectID,
+      confirmed: payload.confirmed == true,
       deadline: Self.deadline()
     )
     return try BridgeServiceIPCCodec.emptySuccess(requestID: request.requestID)

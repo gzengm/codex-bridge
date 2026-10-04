@@ -27,6 +27,8 @@
         fastModeEnabled: settings.fastModeEnabled,
         directApprovalMode: settings.directApprovalMode,
         directApprovalOptions: settings.directApprovalValues.map { approvalChoice($0) },
+        directFullAccessProjectID: settings.directFullAccessProjectID,
+        directFullAccessProjectOptions: settings.directFullAccessProjectOptions,
         taskStartApprovalMode: settings.taskStartApprovalMode,
         taskStartApprovalOptions: settings.taskStartApprovalValues.map { approvalChoice($0) },
         customInstructions: settings.customInstructions,

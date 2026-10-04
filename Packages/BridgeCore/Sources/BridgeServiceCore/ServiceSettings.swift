@@ -8,6 +8,7 @@ public enum ServiceMCPExposureMode: String, Codable, CaseIterable, Sendable {
 public enum ServiceDirectApprovalMode: String, Codable, CaseIterable, Sendable {
   case require
   case auto
+  case fullAccess = "full-access"
 }
 
 public enum ServiceTaskStartApprovalMode: String, Codable, CaseIterable, Sendable {
@@ -23,6 +24,7 @@ public enum ServiceSettingKey: String, CaseIterable, Sendable {
   case qwenStudioExposureMode = "mcp.client.qwen-studio.exposure_mode"
   case directConfiguration = "direct.configuration"
   case directApprovalMode = "direct.approval_mode"
+  case directFullAccessScope = "direct.full_access_scope"
   case taskStartApprovalMode = "tasks.start_approval_mode"
   case defaultExecutionModel = "models.execution.default"
   case defaultExecutionEffort = "models.execution.effort"
@@ -210,21 +212,56 @@ public actor ServiceSettings {
   }
 
   public func directApprovalMode() async throws -> ServiceDirectApprovalMode {
-    guard
-      let setting = try await store.setting(
-        key: ServiceSettingKey.directApprovalMode.rawValue
-      )
-    else {
-      return .require
-    }
-    guard let mode = ServiceDirectApprovalMode(rawValue: setting.value) else {
-      throw ServiceStoreError.corruptRecord
-    }
-    return mode
+    try await directApprovalConfiguration().mode
   }
 
-  public func setDirectApprovalMode(_ mode: ServiceDirectApprovalMode) async throws {
-    try await set(mode.rawValue, for: .directApprovalMode)
+  public func directApprovalConfiguration() async throws -> ServiceDirectApprovalConfiguration {
+    let values = try await store.settingValues(keys: [
+      ServiceSettingKey.directApprovalMode.rawValue,
+      ServiceSettingKey.directFullAccessScope.rawValue,
+    ])
+    let rawMode = values[ServiceSettingKey.directApprovalMode.rawValue] ?? "require"
+    guard let mode = ServiceDirectApprovalMode(rawValue: rawMode) else {
+      throw ServiceStoreError.corruptRecord
+    }
+    guard mode == .fullAccess else {
+      return ServiceDirectApprovalConfiguration(mode: mode)
+    }
+    guard let json = values[ServiceSettingKey.directFullAccessScope.rawValue],
+      let scope = try? JSONDecoder().decode(
+        ServiceDirectFullAccessScope.self, from: Data(json.utf8))
+    else { throw ServiceStoreError.corruptRecord }
+    return ServiceDirectApprovalConfiguration(mode: mode, fullAccessScope: scope)
+  }
+
+  public func setDirectApprovalMode(
+    _ mode: ServiceDirectApprovalMode,
+    fullAccessProject: ServiceProjectRecord? = nil,
+    confirmed: Bool = false
+  ) async throws {
+    let scopeJSON: String
+    if mode == .fullAccess {
+      guard confirmed, let project = fullAccessProject,
+        project.accessPolicy.read == .allowed, project.accessPolicy.write == .allowed,
+        project.directCommandMode != .denied
+      else {
+        throw ServiceStoreError.invalidArgument("完全访问需要明确确认并选择允许读写和命令的项目。")
+      }
+      try project.root.validateCurrentIdentity()
+      let scope = ServiceDirectFullAccessScope(projectID: project.id.rawValue, root: project.root)
+      scopeJSON = String(decoding: try JSONEncoder().encode(scope), as: UTF8.self)
+    } else {
+      scopeJSON = ""
+    }
+    let updatedAt = now()
+    try await store.setSettings([
+      try ServiceSettingRecord(
+        key: ServiceSettingKey.directApprovalMode.rawValue, value: mode.rawValue,
+        updatedAt: updatedAt),
+      try ServiceSettingRecord(
+        key: ServiceSettingKey.directFullAccessScope.rawValue, value: scopeJSON,
+        updatedAt: updatedAt),
+    ])
   }
 
   public func taskStartApprovalMode() async throws -> ServiceTaskStartApprovalMode {

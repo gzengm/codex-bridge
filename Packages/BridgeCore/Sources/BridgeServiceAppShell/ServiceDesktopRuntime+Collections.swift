@@ -26,7 +26,7 @@ extension BridgeServiceAppModel {
     }
     async let approvalResult = optional { try await client.approvals(taskID: nil) }
     async let directApprovalResult = optional { try await client.pendingDirectApprovals() }
-    async let directApprovalModeResult = optional { try await client.directApprovalMode() }
+    async let directApprovalModeResult = optional { try await client.directApprovalConfiguration() }
     async let taskStartApprovalModeResult = optional {
       try await client.taskStartApprovalMode()
     }
@@ -69,8 +69,9 @@ extension BridgeServiceAppModel {
     if let value = await directApprovalResult {
       applyDirectApprovalSnapshot(value)
     }
-    if let value = await directApprovalModeResult, directApprovalMode != value {
-      directApprovalMode = value
+    if let value = await directApprovalModeResult {
+      directApprovalMode = value.mode
+      directFullAccessProjectID = value.projectID
     }
     if let value = await taskStartApprovalModeResult, taskStartApprovalMode != value {
       taskStartApprovalMode = value

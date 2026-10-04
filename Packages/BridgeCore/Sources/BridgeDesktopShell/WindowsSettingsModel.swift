@@ -17,6 +17,8 @@
     var preferences: IPCModelPreferences?
     private(set) var instructions = ""
     private(set) var directMode = "require"
+    private(set) var directFullAccessProjectID: String?
+    private(set) var directFullAccessProjectOptions: [BridgeDesktopChoice] = []
     private(set) var taskStartMode = "require"
     var isRefreshingModels = false
     var modelError: String?
@@ -56,7 +58,7 @@
           accessValues: WindowsSettingsModel.accessValues,
           selectedAccessIndex: 0,
           fastModeEnabled: false,
-          directApprovalValues: WindowsSettingsModel.approvalValues,
+          directApprovalValues: WindowsSettingsModel.directApprovalValues,
           selectedDirectApprovalIndex: 0,
           taskStartApprovalValues: WindowsSettingsModel.approvalValues,
           selectedTaskStartApprovalIndex: 0,
@@ -77,6 +79,7 @@
 
     nonisolated static let accessValues = ["request-approval", "auto-review", "full-access"]
     nonisolated static let approvalValues = ["require", "auto"]
+    nonisolated static let directApprovalValues = ["require", "auto", "full-access"]
 
     func refresh() async {
       guard !busy else { return }
@@ -110,7 +113,12 @@
         failures.append("自定义指令")
       }
       do {
-        directMode = try await client.directApprovalMode()
+        let configuration = try await client.directApprovalConfiguration()
+        directMode = configuration.mode
+        directFullAccessProjectID = configuration.projectID
+        directFullAccessProjectOptions = try await client.projects().filter {
+          $0.capabilities.read == "allowed" && $0.capabilities.write == "allowed"
+        }.map { BridgeDesktopChoice(id: $0.projectID, title: $0.name) }
       } catch {
         failures.append("Direct 审批")
       }
@@ -194,8 +202,10 @@
       publishDisplay()
     }
 
-    func setDirectApprovalMode(_ mode: String) async {
-      await setApprovalMode(mode, direct: true)
+    func setDirectApprovalMode(
+      _ mode: String, projectID: String? = nil, confirmed: Bool = false
+    ) async {
+      await setApprovalMode(mode, direct: true, projectID: projectID, confirmed: confirmed)
     }
 
     func setTaskStartApprovalMode(_ mode: String) async {
@@ -204,8 +214,12 @@
 
     func refreshDisplaySnapshot() { publishDisplay() }
 
-    private func setApprovalMode(_ mode: String, direct: Bool) async {
-      guard Self.approvalValues.contains(mode), connectionState == .connected, !busy else { return }
+    private func setApprovalMode(
+      _ mode: String, direct: Bool, projectID: String? = nil, confirmed: Bool = false
+    ) async {
+      let values = direct ? Self.directApprovalValues : Self.approvalValues
+      guard values.contains(mode), connectionState == .connected, !busy else { return }
+      if mode == "full-access", !confirmed || projectID == nil { return }
       busy = true
       statusText = "正在保存审批设置…"
       publishDisplay()
@@ -215,8 +229,10 @@
       }
       do {
         if direct {
-          try await client.setDirectApprovalMode(mode)
-          directMode = mode
+          try await client.setDirectApprovalMode(mode, projectID: projectID, confirmed: confirmed)
+          let configuration = try await client.directApprovalConfiguration()
+          directMode = configuration.mode
+          directFullAccessProjectID = configuration.projectID
         } else {
           try await client.setTaskStartApprovalMode(mode)
           taskStartMode = mode
@@ -239,7 +255,7 @@
         effortValues.firstIndex(of: $0.executionEffort)
       }
       let accessIndex = current.flatMap { Self.accessValues.firstIndex(of: $0.accessMode) }
-      let directIndex = Self.approvalValues.firstIndex(of: directMode)
+      let directIndex = Self.directApprovalValues.firstIndex(of: directMode)
       let taskIndex = Self.approvalValues.firstIndex(of: taskStartMode)
       let modelOptions = models.map { model in
         BridgeDesktopModelOption(
@@ -262,7 +278,7 @@
         accessValues: Self.accessValues,
         selectedAccessIndex: accessIndex,
         fastModeEnabled: current?.fastModeEnabled ?? false,
-        directApprovalValues: Self.approvalValues,
+        directApprovalValues: Self.directApprovalValues,
         selectedDirectApprovalIndex: directIndex,
         taskStartApprovalValues: Self.approvalValues,
         selectedTaskStartApprovalIndex: taskIndex,
@@ -280,6 +296,8 @@
         executionEffort: current?.executionEffort ?? "",
         accessMode: current?.accessMode ?? "request-approval",
         directApprovalMode: directMode,
+        directFullAccessProjectID: directFullAccessProjectID,
+        directFullAccessProjectOptions: directFullAccessProjectOptions,
         taskStartApprovalMode: taskStartMode,
         modelOptions: modelOptions,
         keepServiceRunningAfterExit: keepServiceRunningAfterExit,

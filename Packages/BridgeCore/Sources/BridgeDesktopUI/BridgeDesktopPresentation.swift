@@ -33,7 +33,12 @@ public enum BridgeDesktopPresentation {
   }
 
   public static func approvalModeTitle(_ value: String) -> String {
-    value == "auto" ? "自动" : "每次询问"
+    switch value {
+    case "require": "每次询问"
+    case "auto": "自动"
+    case "full-access": "完全访问"
+    default: value
+    }
   }
 
   public static func agentPermissionOptions(

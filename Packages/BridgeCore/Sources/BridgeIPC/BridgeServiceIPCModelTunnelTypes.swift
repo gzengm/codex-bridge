@@ -94,17 +94,23 @@ public struct IPCModelCatalogRequest: Codable, Equatable, Sendable {
 
 public struct IPCDirectApprovalModeRequest: Codable, Equatable, Sendable {
   public let mode: String
+  public let projectID: String?
+  public let confirmed: Bool?
 
-  public init(mode: String) {
+  public init(mode: String, projectID: String? = nil, confirmed: Bool? = nil) {
     self.mode = mode
+    self.projectID = projectID
+    self.confirmed = confirmed
   }
 }
 
 public struct IPCDirectApprovalModeResponse: Codable, Equatable, Sendable {
   public let mode: String
+  public let projectID: String?
 
-  public init(mode: String) {
+  public init(mode: String, projectID: String? = nil) {
     self.mode = mode
+    self.projectID = projectID
   }
 }
 

@@ -50,6 +50,7 @@ public struct DirectCommandRequest: Equatable, Sendable {
 public struct DirectCommandResolution: Equatable, Sendable {
   public let allowed: Bool
   public let requiresApproval: Bool
+  public let fullAccessEligible: Bool
   public let argv: [String]
   public let workingDirectory: String?
   public let requiresNetwork: Bool
@@ -61,10 +62,12 @@ public struct DirectCommandResolution: Equatable, Sendable {
     argv: [String],
     workingDirectory: String? = nil,
     requiresNetwork: Bool,
-    reason: DirectCommandDenialReason?
+    reason: DirectCommandDenialReason?,
+    fullAccessEligible: Bool = false
   ) {
     self.allowed = allowed
     self.requiresApproval = requiresApproval
+    self.fullAccessEligible = fullAccessEligible
     self.argv = argv
     self.workingDirectory = workingDirectory
     self.requiresNetwork = requiresNetwork

@@ -103,12 +103,13 @@ extension BridgeServiceApplication {
       resolvedArgv: launchArgv,
       executableIdentity: launchArgv.first.flatMap(DirectExecutableIdentity.read(atPath:))
     )
-    try await requireDirectApproval(
+    let usedFullAccess = try await requireDirectApproval(
       project: project,
       kind: resolution.requiresNetwork ? .network : .command,
       summary: "Run \(launchArgv.joined(separator: " "))",
       payload: approvalPayload,
-      clientRequestID: request.clientRequestID
+      clientRequestID: request.clientRequestID,
+      fullAccessEligible: resolution.fullAccessEligible
     )
     guard
       approvalPayload.resolvedArgv == launchArgv,
@@ -124,6 +125,19 @@ extension BridgeServiceApplication {
     )
     var launched = false
     do {
+      let currentProject = try await applyingDirectConfiguration(
+        to: writableProject(request.projectID))
+      guard currentProject == project,
+        try Self.resolvedWorkingDirectory(
+          project: currentProject, relative: resolution.workingDirectory)
+          == workingDirectory,
+        approvalPayload.executableIdentity
+          == launchArgv.first.flatMap(DirectExecutableIdentity.read(atPath:))
+      else { throw BridgeMCPQueryError.pathChanged }
+      let configuration = try await settings.directApprovalConfiguration()
+      if usedFullAccess, !configuration.hasFullAccess(for: currentProject) {
+        throw BridgeMCPQueryError.approvalDenied
+      }
       _ = try await directCommands.launch(
         sessionID: sessionID,
         projectID: project.id,
@@ -132,8 +146,9 @@ extension BridgeServiceApplication {
         requiresNetwork: resolution.requiresNetwork,
         usePTY: request.tty,
         timeout: .milliseconds(request.timeoutMS),
-        denyNetwork: denyNetwork || !resolution.requiresNetwork
-          || project.accessPolicy.network == .denied,
+        denyNetwork: configuration.commandDeniesNetwork(
+          for: currentProject, requiresNetwork: resolution.requiresNetwork,
+          forceIsolation: denyNetwork),
         onExit: { await lease.release() }
       )
       launched = true

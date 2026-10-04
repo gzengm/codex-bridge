@@ -33,12 +33,14 @@ extension BridgeServiceAppModel {
     }
   }
 
-  public func setDirectApprovalMode(_ mode: String) {
+  public func setDirectApprovalMode(
+    _ mode: String, projectID: String? = nil, confirmed: Bool = false
+  ) {
     runMutation { [weak self] client in
       guard let self else { return }
-      try await client.setDirectApprovalMode(mode)
+      try await client.setDirectApprovalMode(mode, projectID: projectID, confirmed: confirmed)
       await self.refresh(silent: true, includeCatalog: false)
-      self.postToast(mode == "auto" ? "已开启 Direct 操作自动批准" : "已设置为每次 Direct 操作均需批准")
+      self.postToast("Direct 审批策略已保存")
     }
   }
 

@@ -105,12 +105,15 @@ extension BridgeServiceAppModel {
   private func refreshSettingsCollections(client: any BridgeServiceClientProtocol) async {
     let preferenceGeneration = codexModelCatalogRequests.preferenceGeneration
     async let configurationResult = try? await client.directConfiguration()
-    async let approvalModeResult = try? await client.directApprovalMode()
+    async let approvalModeResult = try? await client.directApprovalConfiguration()
     async let taskStartModeResult = try? await client.taskStartApprovalMode()
     async let instructionsResult = try? await client.customInstructions()
     async let preferencesResult = try? await client.modelPreferences()
     if let value = await configurationResult { directConfiguration = value }
-    if let value = await approvalModeResult { directApprovalMode = value }
+    if let value = await approvalModeResult {
+      directApprovalMode = value.mode
+      directFullAccessProjectID = value.projectID
+    }
     if let value = await taskStartModeResult { taskStartApprovalMode = value }
     if let value = await instructionsResult { customInstructions = value }
     if let value = await preferencesResult,

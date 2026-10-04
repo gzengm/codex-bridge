@@ -129,6 +129,8 @@
     var executionEffort: String = ""
     var accessMode: String = "request-approval"
     var directApprovalMode: String = "require"
+    var directFullAccessProjectID: String? = nil
+    var directFullAccessProjectOptions: [BridgeDesktopChoice] = []
     var taskStartApprovalMode: String = "require"
     var modelOptions: [BridgeDesktopModelOption] = []
     var keepServiceRunningAfterExit: Bool = true

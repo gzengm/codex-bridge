@@ -79,13 +79,50 @@
     var context = { page: page, emit: emit };
     var card = S.node("section", "page-card settings-card");
     card.appendChild(S.node("h3", null, "安全审批策略"));
+    var pendingFullAccess = false;
     var direct = S.selectField("Direct 操作", page.directApprovalMode, S.choices(page.directApprovalMode, page.directApprovalOptions), function (value) {
-      context.emit("setDirectApprovalMode", { mode: value });
+      pendingFullAccess = value === "full-access";
+      if (!pendingFullAccess) context.emit("setDirectApprovalMode", { mode: value });
+      updateFullAccess();
     }, "");
+    var fullAccess = S.node("div", "settings-subsection");
+    var fullProject = S.selectField("完全访问项目", page.directFullAccessProjectID || "", [], function () {
+      updateFullAccess();
+    }, "");
+    fullAccess.appendChild(fullProject.wrapper);
+    fullAccess.appendChild(S.node("p", "hint",
+      "仅选中项目的普通已登记或内置安全 Direct 命令免审批；高风险、未登记命令及文件/路径操作仍需批准。网络已允许时，命令以当前用户权限运行，无 Bridge 进程沙箱，可访问该用户能够访问的本机文件；网络拒绝时仍使用网络隔离。命令黑名单、项目权限及外层平台限制仍生效。"));
+    var enableFullAccess = S.button("确认启用此项目完全访问", null, {}, null, "small", true);
+    enableFullAccess.addEventListener("click", function () {
+      if (enableFullAccess.disabled) return;
+      var projectID = fullProject.control.value;
+      var project = S.safeArray(context.page.directFullAccessProjectOptions).find(function (item) {
+        return item.id === projectID;
+      });
+      if (!project) return;
+      if (!global.confirm("为项目“" + project.title + "”启用完全访问？\n\n已登记普通命令和内置安全调用免逐次询问；高风险、未登记命令及文件/路径操作仍需批准。网络已允许时，它们以当前用户权限运行，能够读写该用户可访问的本机文件、执行程序并访问网络。网络拒绝、命令黑名单和项目权限仍强制执行；其他项目及 Agent 权限不变。")) {
+        pendingFullAccess = false;
+        direct.control.value = context.page.directApprovalMode;
+        fullProject.control.value = context.page.directFullAccessProjectID || "";
+        updateFullAccess();
+        return;
+      }
+      pendingFullAccess = false;
+      context.emit("setDirectApprovalMode", { mode: "full-access", projectID: projectID, confirmed: true });
+    });
+    fullAccess.appendChild(enableFullAccess);
+    function updateFullAccess() {
+      fullAccess.hidden = direct.control.value !== "full-access";
+      fullProject.control.disabled = !context.page.canSaveApprovalModes;
+      enableFullAccess.disabled = !context.page.canSaveApprovalModes || !fullProject.control.value
+        || (context.page.directApprovalMode === "full-access"
+          && context.page.directFullAccessProjectID === fullProject.control.value);
+    }
     var task = S.selectField("远程任务启动", page.taskStartApprovalMode, S.choices(page.taskStartApprovalMode, page.taskStartApprovalOptions), function (value) {
       context.emit("setTaskStartApprovalMode", { mode: value });
     }, "");
     card.appendChild(direct.wrapper);
+    card.appendChild(fullAccess);
     card.appendChild(task.wrapper);
     card.appendChild(S.node("p", "hint", "策略仍由本机 Service 和项目权限强制执行。"));
     function update(next, nextEmit) {
@@ -93,7 +130,13 @@
       context.emit = nextEmit;
       D.selectOptions(direct.control, S.choices(next.directApprovalMode, next.directApprovalOptions));
       D.selectOptions(task.control, S.choices(next.taskStartApprovalMode, next.taskStartApprovalOptions));
-      direct.control.value = next.directApprovalMode || "";
+      var projectValue = pendingFullAccess || direct.control.value === "full-access"
+        ? fullProject.control.value : next.directFullAccessProjectID || "";
+      D.selectOptions(fullProject.control, [{ id: "", title: "请选择项目" }]
+        .concat(S.safeArray(next.directFullAccessProjectOptions)));
+      fullProject.control.value = projectValue || next.directFullAccessProjectID || "";
+      direct.control.value = pendingFullAccess ? "full-access" : next.directApprovalMode || "";
+      updateFullAccess();
       task.control.value = next.taskStartApprovalMode || "";
       direct.control.disabled = !next.canSaveApprovalModes;
       task.control.disabled = !next.canSaveApprovalModes;

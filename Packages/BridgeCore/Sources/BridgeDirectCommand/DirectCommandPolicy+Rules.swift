@@ -250,7 +250,13 @@ extension DirectCommandPolicy {
       argv: executionArgv,
       workingDirectory: matched?.workingDirectory ?? request.workingDirectory,
       requiresNetwork: needsNetwork,
-      reason: nil
+      reason: nil,
+      fullAccessEligible: !requiresApproval
+        && (matched != nil
+          || (matchedBuiltInRule != nil
+            && safeBuiltInInvocation(
+              policyArgv, projectRoot: project.root.canonicalPath,
+              workingDirectory: matched?.workingDirectory ?? request.workingDirectory)))
     )
   }
 }

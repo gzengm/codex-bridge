@@ -136,6 +136,7 @@ public final class BridgeServiceAppModel: ObservableObject {
   @Published public internal(set) var directApprovals: [IPCPendingDirectApproval] = []
   @Published public internal(set) var resolvingApprovalKeys: Set<String> = []
   @Published public internal(set) var directApprovalMode = "require"
+  @Published public internal(set) var directFullAccessProjectID: String?
   @Published public internal(set) var taskStartApprovalMode = "require"
   @Published public internal(set) var mcpClients: [IPCMCPClientStatus] = []
   @Published public internal(set) var deepSeekHarnessMCPServers:
