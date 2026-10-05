@@ -163,7 +163,8 @@ extension BridgeServiceRequestController {
     return try BridgeServiceIPCCodec.success(
       requestID: request.requestID,
       payload: IPCDirectApprovalModeResponse(
-        mode: configuration.mode.rawValue, projectID: configuration.fullAccessScope?.projectID)
+        mode: configuration.mode.rawValue, projectID: configuration.fullAccessScope?.projectID,
+        fileWritesAllowed: configuration.fullAccessScope?.fileWritesAllowed)
     )
   }
 
@@ -179,6 +180,7 @@ extension BridgeServiceRequestController {
       mode,
       projectID: payload.projectID,
       confirmed: payload.confirmed == true,
+      fileWritesConfirmed: payload.fileWritesConfirmed == true,
       deadline: Self.deadline()
     )
     return try BridgeServiceIPCCodec.emptySuccess(requestID: request.requestID)

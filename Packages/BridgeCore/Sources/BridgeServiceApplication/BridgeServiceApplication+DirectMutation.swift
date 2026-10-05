@@ -36,19 +36,18 @@ extension BridgeServiceApplication {
       throw BridgeMCPQueryError.contractRejected
     }
     guard case .pending = operation.state else { throw BridgeMCPQueryError.contractRejected }
-    let project = try await approvedDirectProject(
-      projectID: operation.request.projectID,
-      kind: .fileWrite,
-      summary: "Apply (operation.request.kind) mutation (request.operationID)",
-      payload: operation.request,
-      clientRequestID: request.clientRequestID ?? operation.request.clientRequestID
-    )
+    let project = try await writableProject(operation.request.projectID)
     do {
       _ = try await withDirectLease(
         project: project,
         owner: .directFileOperation(operationID: request.operationID)
       ) {
-        try await self.mutations.apply(operation.prepared)
+        try await self.approvePreparedDirectFileMutation(
+          operation.prepared, project: project,
+          summary: "Apply (operation.request.kind) mutation (request.operationID)",
+          payload: operation.request,
+          clientRequestID: request.clientRequestID ?? operation.request.clientRequestID)
+        return try await self.mutations.apply(operation.prepared)
       }
       guard let applied = await directMutationOperations.markApplied(request.operationID) else {
         throw BridgeMCPQueryError.contractRejected

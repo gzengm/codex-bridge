@@ -18,6 +18,7 @@
     private(set) var instructions = ""
     private(set) var directMode = "require"
     private(set) var directFullAccessProjectID: String?
+    private(set) var directFullAccessFileWritesAllowed = false
     private(set) var directFullAccessProjectOptions: [BridgeDesktopChoice] = []
     private(set) var taskStartMode = "require"
     var isRefreshingModels = false
@@ -116,6 +117,7 @@
         let configuration = try await client.directApprovalConfiguration()
         directMode = configuration.mode
         directFullAccessProjectID = configuration.projectID
+        directFullAccessFileWritesAllowed = configuration.fileWritesAllowed == true
         directFullAccessProjectOptions = try await client.projects().filter {
           $0.capabilities.read == "allowed" && $0.capabilities.write == "allowed"
         }.map { BridgeDesktopChoice(id: $0.projectID, title: $0.name) }
@@ -203,9 +205,12 @@
     }
 
     func setDirectApprovalMode(
-      _ mode: String, projectID: String? = nil, confirmed: Bool = false
+      _ mode: String, projectID: String? = nil, confirmed: Bool = false,
+      fileWritesConfirmed: Bool = false
     ) async {
-      await setApprovalMode(mode, direct: true, projectID: projectID, confirmed: confirmed)
+      await setApprovalMode(
+        mode, direct: true, projectID: projectID, confirmed: confirmed,
+        fileWritesConfirmed: fileWritesConfirmed)
     }
 
     func setTaskStartApprovalMode(_ mode: String) async {
@@ -215,7 +220,8 @@
     func refreshDisplaySnapshot() { publishDisplay() }
 
     private func setApprovalMode(
-      _ mode: String, direct: Bool, projectID: String? = nil, confirmed: Bool = false
+      _ mode: String, direct: Bool, projectID: String? = nil, confirmed: Bool = false,
+      fileWritesConfirmed: Bool = false
     ) async {
       let values = direct ? Self.directApprovalValues : Self.approvalValues
       guard values.contains(mode), connectionState == .connected, !busy else { return }
@@ -229,10 +235,13 @@
       }
       do {
         if direct {
-          try await client.setDirectApprovalMode(mode, projectID: projectID, confirmed: confirmed)
+          try await client.setDirectApprovalMode(
+            mode, projectID: projectID, confirmed: confirmed,
+            fileWritesConfirmed: fileWritesConfirmed)
           let configuration = try await client.directApprovalConfiguration()
           directMode = configuration.mode
           directFullAccessProjectID = configuration.projectID
+          directFullAccessFileWritesAllowed = configuration.fileWritesAllowed == true
         } else {
           try await client.setTaskStartApprovalMode(mode)
           taskStartMode = mode
@@ -297,6 +306,7 @@
         accessMode: current?.accessMode ?? "request-approval",
         directApprovalMode: directMode,
         directFullAccessProjectID: directFullAccessProjectID,
+        directFullAccessFileWritesAllowed: directFullAccessFileWritesAllowed,
         directFullAccessProjectOptions: directFullAccessProjectOptions,
         taskStartApprovalMode: taskStartMode,
         modelOptions: modelOptions,

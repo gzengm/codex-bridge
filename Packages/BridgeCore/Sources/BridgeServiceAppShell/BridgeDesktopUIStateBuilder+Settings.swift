@@ -32,6 +32,7 @@ extension BridgeDesktopUIStateBuilder {
         titles: ["require": "每次询问", "auto": "自动", "full-access": "完全访问"]
       ),
       directFullAccessProjectID: model.directFullAccessProjectID,
+      directFullAccessFileWritesAllowed: model.directFullAccessFileWritesAllowed,
       directFullAccessProjectOptions: model.projects.filter {
         $0.capabilities.read == "allowed" && $0.capabilities.write == "allowed"
       }.map { BridgeDesktopChoice(id: $0.projectID, title: $0.name) },

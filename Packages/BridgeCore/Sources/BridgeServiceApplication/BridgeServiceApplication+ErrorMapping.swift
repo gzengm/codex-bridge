@@ -102,6 +102,7 @@ extension BridgeServiceApplication {
   }
 
   static func publicMutationError(_ error: Error) -> BridgeMCPQueryError {
+    if let queryError = error as? BridgeMCPQueryError { return queryError }
     guard let value = error as? ProjectMutationError else { return .unavailable }
     switch value {
     case .unknownProject:

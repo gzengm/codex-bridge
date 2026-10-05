@@ -72,6 +72,7 @@ extension BridgeServiceAppModel {
     if let value = await directApprovalModeResult {
       directApprovalMode = value.mode
       directFullAccessProjectID = value.projectID
+      directFullAccessFileWritesAllowed = value.fileWritesAllowed == true
     }
     if let value = await taskStartApprovalModeResult, taskStartApprovalMode != value {
       taskStartApprovalMode = value

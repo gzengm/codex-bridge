@@ -16,7 +16,7 @@ import Testing
   import WinSDK
 #endif
 
-private struct Fixture {
+struct FullAccessFixture {
   let root: URL
   let store: SimpleServiceStore
   let settings: ServiceSettings
@@ -24,7 +24,7 @@ private struct Fixture {
   let first: ServiceProjectRecord
   let second: ServiceProjectRecord
 
-  static func make() async throws -> Fixture {
+  static func make() async throws -> FullAccessFixture {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(
       "CodexBridge-FullAccessTests-" + UUID().uuidString)
     let firstRoot = root.appendingPathComponent("first")
@@ -49,14 +49,14 @@ private struct Fixture {
       coordinator: coordinator,
       catalog: ServiceCodexCatalog(configuration: .init(clientInfo: info)),
       runtimeStatus: ServiceRuntimeStatus())
-    return Fixture(
+    return FullAccessFixture(
       root: root, store: store, settings: settings, application: application,
       first: first, second: second)
   }
 
-  func enableFullAccess() async throws {
+  func enableFullAccess(fileWrites: Bool = false) async throws {
     try await application.serviceSetDirectApprovalMode(
-      .fullAccess, projectID: first.id.rawValue, confirmed: true,
+      .fullAccess, projectID: first.id.rawValue, confirmed: true, fileWritesConfirmed: fileWrites,
       deadline: ContinuousClock.now.advanced(by: .seconds(10)))
   }
 
@@ -127,7 +127,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func defaultsAndLegacyAutoAreUnchanged() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     #expect(try await fixture.settings.directApprovalMode() == .require)
     #expect(try await fixture.settings.taskStartApprovalMode() == .require)
@@ -140,7 +140,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func optInRequiresConfirmationAndProjectAndPersists() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     await #expect(throws: BridgeMCPQueryError.contractRejected) {
       try await fixture.application.serviceSetDirectApprovalMode(
@@ -167,7 +167,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func corruptFullAccessAndChangedIdentityFailClosed() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     try await fixture.settings.set("full-access", for: .directApprovalMode)
     await #expect(throws: ServiceStoreError.corruptRecord) {
@@ -188,7 +188,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func deniedAndApprovalRequiredProjectPoliciesRemainEffective() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     try await fixture.enableFullAccess()
     for permission in [ProjectPermission.denied, .requiresLocalApproval] {
@@ -209,7 +209,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func requireAllowsOnceDeniesAndCancels() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     let id = try await approvalRequired(fixture.application, project: fixture.first)
     #expect(await fixture.application.approvals.approve(approvalID: id))
@@ -233,7 +233,7 @@ struct DirectFullAccessTests {
   }
 
   @Test func autoKeepsItsBehaviorAndFullAccessIsLimitedToCommands() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     try await fixture.settings.setDirectApprovalMode(.auto)
     _ = try await fixture.application.requireDirectApproval(
@@ -257,7 +257,7 @@ struct DirectFullAccessTests {
 
   #if os(Windows)
     @Test func windowsIsolatedNodeAndGitOnSmallFixture() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       let node = try windowsTestExecutable("node", project: fixture.first)
       let git = try windowsTestExecutable("git", project: fixture.first)
@@ -277,7 +277,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsFullAccessNodeAndGitThroughServiceAndProjectBoundary() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       try await fixture.enableFullAccess()
       for argv in [["node", "--version"], ["git", "--version"]] {
@@ -314,7 +314,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsFullAccessRepeatedGitNodeCommandsRemainResponsive() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       try await fixture.enableFullAccess()
       let manager = await fixture.application.directCommands
@@ -336,7 +336,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsRequireAutoAndFullAccessNetworkDenialThroughService() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       let manager = await fixture.application.directCommands
       let request = MCPDirectExecRequest(
@@ -379,7 +379,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsGitRevParseInsideIndependentRepository() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       let git = try windowsTestExecutable("git", project: fixture.first)
       let output = DirectCommandOutputCollector(maximumBytes: 4096)
@@ -405,7 +405,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsCancellationStopsChildrenAndHandlesStayBounded() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       let node = try windowsTestExecutable("node", project: fixture.first)
       let manager = await fixture.application.directCommands
@@ -447,7 +447,7 @@ struct DirectFullAccessTests {
     }
 
     @Test func windowsErrorsTimeoutStopAndRepeatedRunsReleaseResources() async throws {
-      let fixture = try await Fixture.make()
+      let fixture = try await FullAccessFixture.make()
       defer { fixture.cleanup() }
       let node = try windowsTestExecutable("node", project: fixture.first)
       let manager = await fixture.application.directCommands
@@ -491,7 +491,7 @@ struct DirectFullAccessTests {
   #endif
 
   @Test func commandPolicyPreservesDenialsAndElevatedApproval() async throws {
-    let fixture = try await Fixture.make()
+    let fixture = try await FullAccessFixture.make()
     defer { fixture.cleanup() }
     let command = try ServiceWorkspaceCommand(
       id: "fixture-command", name: "Fixture", executable: "fixture.exe", arguments: [],

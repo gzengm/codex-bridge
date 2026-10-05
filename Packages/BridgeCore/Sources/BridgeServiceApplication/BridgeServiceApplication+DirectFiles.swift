@@ -10,13 +10,7 @@ extension BridgeServiceApplication {
     deadline: ContinuousClock.Instant
   ) async throws -> MCPDirectWriteReceipt {
     try Self.checkDeadline(deadline)
-    let project = try await approvedDirectProject(
-      projectID: request.projectID,
-      kind: .fileWrite,
-      summary: "Write \(request.relativePath)",
-      payload: request,
-      clientRequestID: request.clientRequestID
-    )
+    let project = try await writableProject(request.projectID)
     let operationID = "op-" + UUID().uuidString.lowercased()
     let directRequest = MCPDirectMutationRequest(
       projectID: request.projectID,
@@ -34,6 +28,9 @@ extension BridgeServiceApplication {
         owner: .directFileOperation(operationID: operationID)
       ) {
         let prepared = try await self.prepareDirectMutation(directRequest)
+        try await self.approvePreparedDirectFileMutation(
+          prepared, project: project, summary: "Write \(request.relativePath)", payload: request,
+          clientRequestID: request.clientRequestID)
         let applied = try await self.mutations.apply(prepared)
         let result = applied.first
         guard let result else { throw ProjectMutationError.invalidRequest }
@@ -63,13 +60,7 @@ extension BridgeServiceApplication {
     deadline: ContinuousClock.Instant
   ) async throws -> MCPDirectEditReceipt {
     try Self.checkDeadline(deadline)
-    let project = try await approvedDirectProject(
-      projectID: request.projectID,
-      kind: .fileWrite,
-      summary: "Edit \(request.relativePath)",
-      payload: request,
-      clientRequestID: request.clientRequestID
-    )
+    let project = try await writableProject(request.projectID)
     let operationID = "op-" + UUID().uuidString.lowercased()
     let directRequest = MCPDirectMutationRequest(
       projectID: request.projectID,
@@ -87,6 +78,9 @@ extension BridgeServiceApplication {
         owner: .directFileOperation(operationID: operationID)
       ) {
         let prepared = try await self.prepareDirectMutation(directRequest)
+        try await self.approvePreparedDirectFileMutation(
+          prepared, project: project, summary: "Edit \(request.relativePath)", payload: request,
+          clientRequestID: request.clientRequestID)
         let applied = try await self.mutations.apply(prepared)
         let result = applied.first
         guard let result else { throw ProjectMutationError.invalidRequest }
@@ -116,13 +110,7 @@ extension BridgeServiceApplication {
     deadline: ContinuousClock.Instant
   ) async throws -> MCPDirectPatchReceipt {
     try Self.checkDeadline(deadline)
-    let project = try await approvedDirectProject(
-      projectID: request.projectID,
-      kind: .fileWrite,
-      summary: "Apply patch",
-      payload: request,
-      clientRequestID: request.clientRequestID
-    )
+    let project = try await writableProject(request.projectID)
     let operationID = "op-" + UUID().uuidString.lowercased()
     let directRequest = MCPDirectMutationRequest(
       projectID: request.projectID,
@@ -136,6 +124,9 @@ extension BridgeServiceApplication {
         owner: .directFileOperation(operationID: operationID)
       ) {
         let prepared = try await self.prepareDirectMutation(directRequest)
+        try await self.approvePreparedDirectFileMutation(
+          prepared, project: project, summary: "Apply patch", payload: request,
+          clientRequestID: request.clientRequestID)
         let results = try await self.mutations.apply(prepared)
         return (prepared, results)
       }
@@ -175,6 +166,41 @@ extension BridgeServiceApplication {
     } catch {
       throw error
     }
+  }
+
+  func approvePreparedDirectFileMutation(
+    _ prepared: PreparedProjectMutation,
+    project: ServiceProjectRecord,
+    summary: String,
+    payload: some Encodable,
+    clientRequestID: String?
+  ) async throws {
+    // 取得工作区租约并准备文件修订后，重新核验当前权限。
+    let current = try await writableProject(project.id.rawValue)
+    guard current.root == project.root, prepared.projectID == current.id else {
+      throw BridgeMCPQueryError.pathForbidden
+    }
+    try current.root.validateCurrentIdentity()
+    let eligible: Bool
+    switch prepared.request {
+    case .write, .edit:
+      eligible = true
+    case .patch(let request):
+      eligible =
+        !request.operations.isEmpty
+        && request.operations.allSatisfy { ["add", "update"].contains($0.action) }
+    }
+    // 版本控制元数据会影响后续命令执行，因此仍需单独审批。
+    let ordinaryFiles =
+      !prepared.changedFiles.isEmpty
+      && prepared.changedFiles.allSatisfy { change in
+        !change.relativePath.split(separator: "/").contains {
+          [".git", ".hg", ".svn"].contains($0.lowercased())
+        }
+      }
+    _ = try await requireDirectApproval(
+      project: current, kind: .fileWrite, summary: summary, payload: payload,
+      clientRequestID: clientRequestID, fullAccessEligible: eligible && ordinaryFiles)
   }
 
   private static func safeBoundedDiff(_ diff: BoundedDiff) -> MCPBoundedDiff {

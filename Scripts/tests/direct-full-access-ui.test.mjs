@@ -16,7 +16,7 @@ class Element {
   change(value) { if (!this.disabled) { this.value = value; this.onChange?.(value); } }
 }
 
-function harness(mode = 'auto', projectID = null) {
+function harness(mode = 'auto', projectID = null, fileWritesAllowed = false) {
   const root = new Element('main');
   const fields = new Map();
   const commands = [];
@@ -58,6 +58,7 @@ function harness(mode = 'auto', projectID = null) {
   vm.runInNewContext(source, { window: global, document: { getElementById: () => root } });
   const page = {
     header: {}, directApprovalMode: mode, directFullAccessProjectID: projectID,
+    directFullAccessFileWritesAllowed: fileWritesAllowed,
     directApprovalOptions: [{ id: 'require', title: '每次询问' }, { id: 'auto', title: '自动' }, { id: 'full-access', title: '完全访问' }],
     directFullAccessProjectOptions: [{ id: 'first', title: 'First fixture' }, { id: 'second', title: 'Second fixture' }],
     taskStartApprovalMode: 'require', taskStartApprovalOptions: [{ id: 'require', title: '每次询问' }, { id: 'auto', title: '自动' }],
@@ -91,9 +92,13 @@ test('full access requires explicit project and confirmation', () => {
   assert.equal(h.confirmations.length, 1);
   assert.match(h.confirmations[0], /First fixture/);
   assert.match(h.confirmations[0], /本机文件/);
+  assert.match(h.confirmations[0], /文件创建、修改/);
+  assert.match(h.confirmations[0], /删除、移动/);
+  assert.match(h.confirmations[0], /符号链接逃逸/);
+  assert.match(h.confirmations[0], /云端工具和平台自身的审批规则仍生效/);
   assert.match(h.confirmations[0], /网络拒绝/);
   assert.match(h.confirmations[0], /其他项目及 Agent 权限不变/);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.commands)), [{ command: 'setDirectApprovalMode', payload: { mode: 'full-access', projectID: 'first', confirmed: true } }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.commands)), [{ command: 'setDirectApprovalMode', payload: { mode: 'full-access', projectID: 'first', confirmed: true, fileWritesConfirmed: true } }]);
 });
 
 test('cancel leaves saved policy and project unchanged', () => {
@@ -108,7 +113,7 @@ test('cancel leaves saved policy and project unchanged', () => {
 });
 
 test('saved scope, explicit scope replacement and revocation', () => {
-  const h = harness('full-access', 'first');
+  const h = harness('full-access', 'first', true);
   assert.equal(h.fields.get('完全访问项目').control.value, 'first');
   assert.equal(h.enable.disabled, true);
   h.fields.get('完全访问项目').control.change('second');
@@ -128,4 +133,24 @@ test('unavailable service disables opt-in and legacy changes', () => {
   assert.equal(h.enable.disabled, true);
   h.enable.click();
   assert.equal(h.commands.length, 0);
+});
+
+
+test('legacy full scope requires a new explicit file-write confirmation', () => {
+  const h = harness('full-access', 'first');
+  assert.equal(h.enable.disabled, false);
+  assert.equal(h.commands.length, 0);
+  h.global.consent = false;
+  h.enable.click();
+  assert.equal(h.commands.length, 0);
+  assert.equal(h.page.directFullAccessFileWritesAllowed, false);
+  assert.equal(h.fields.get('Direct 操作').control.value, 'full-access');
+  assert.equal(h.fields.get('完全访问项目').control.value, 'first');
+  h.global.consent = true;
+  h.enable.click();
+  assert.equal(h.commands.length, 1);
+  assert.equal(h.commands[0].payload.fileWritesConfirmed, true);
+  h.page.directFullAccessFileWritesAllowed = true;
+  h.render();
+  assert.equal(h.enable.disabled, true);
 });

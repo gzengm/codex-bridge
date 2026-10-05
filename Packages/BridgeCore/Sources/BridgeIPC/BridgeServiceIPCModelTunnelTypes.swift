@@ -96,21 +96,28 @@ public struct IPCDirectApprovalModeRequest: Codable, Equatable, Sendable {
   public let mode: String
   public let projectID: String?
   public let confirmed: Bool?
+  public let fileWritesConfirmed: Bool?
 
-  public init(mode: String, projectID: String? = nil, confirmed: Bool? = nil) {
+  public init(
+    mode: String, projectID: String? = nil, confirmed: Bool? = nil,
+    fileWritesConfirmed: Bool? = nil
+  ) {
     self.mode = mode
     self.projectID = projectID
     self.confirmed = confirmed
+    self.fileWritesConfirmed = fileWritesConfirmed
   }
 }
 
 public struct IPCDirectApprovalModeResponse: Codable, Equatable, Sendable {
   public let mode: String
   public let projectID: String?
+  public let fileWritesAllowed: Bool?
 
-  public init(mode: String, projectID: String? = nil) {
+  public init(mode: String, projectID: String? = nil, fileWritesAllowed: Bool? = nil) {
     self.mode = mode
     self.projectID = projectID
+    self.fileWritesAllowed = fileWritesAllowed
   }
 }
 

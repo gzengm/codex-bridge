@@ -47,9 +47,13 @@ extension BridgeServiceApplication {
     _ mode: ServiceDirectApprovalMode,
     projectID: String? = nil,
     confirmed: Bool = false,
+    fileWritesConfirmed: Bool = false,
     deadline: ContinuousClock.Instant
   ) async throws {
     try Self.checkDeadline(deadline)
+    guard !fileWritesConfirmed || mode == .fullAccess else {
+      throw BridgeMCPQueryError.contractRejected
+    }
     let project: ServiceProjectRecord?
     if mode == .fullAccess {
       guard let projectID, confirmed else {
@@ -60,7 +64,8 @@ extension BridgeServiceApplication {
       project = nil
     }
     try await settings.setDirectApprovalMode(
-      mode, fullAccessProject: project, confirmed: confirmed)
+      mode, fullAccessProject: project, confirmed: confirmed,
+      fileWritesConfirmed: fileWritesConfirmed)
   }
 
   public func serviceDirectApprovalConfiguration(
@@ -122,10 +127,15 @@ extension BridgeServiceApplication {
     if await approvals.denialIsActive(payloadDigest: digest, clientRequestID: clientRequestID) {
       throw BridgeMCPQueryError.approvalDenied
     }
-    if fullAccessEligible, kind == .command || kind == .network,
-      configuration.hasFullAccess(for: project)
-    {
-      return true
+    if fullAccessEligible {
+      switch kind {
+      case .command, .network:
+        if configuration.hasFullAccess(for: project) { return true }
+      case .fileWrite:
+        if configuration.hasFullAccessFileWrites(for: project) { return true }
+      default:
+        break
+      }
     }
     let granted = await approvals.consume(payloadDigest: digest, clientRequestID: clientRequestID)
     if granted { return false }

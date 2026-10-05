@@ -39,7 +39,8 @@ extension BridgeDesktopCommandRouter {
         ["require", "auto", "full-access"].contains(mode)
       else { return }
       model.setDirectApprovalMode(
-        mode, projectID: payload.projectID, confirmed: payload.confirmed == true)
+        mode, projectID: payload.projectID, confirmed: payload.confirmed == true,
+        fileWritesConfirmed: payload.fileWritesConfirmed == true)
     case .setTaskStartApprovalMode:
       guard connected(model), let mode = approvalMode(payload.mode) else { return }
       model.setTaskStartApprovalMode(mode)

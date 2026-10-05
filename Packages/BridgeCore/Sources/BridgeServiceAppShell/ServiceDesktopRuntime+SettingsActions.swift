@@ -34,11 +34,14 @@ extension BridgeServiceAppModel {
   }
 
   public func setDirectApprovalMode(
-    _ mode: String, projectID: String? = nil, confirmed: Bool = false
+    _ mode: String, projectID: String? = nil, confirmed: Bool = false,
+    fileWritesConfirmed: Bool = false
   ) {
     runMutation { [weak self] client in
       guard let self else { return }
-      try await client.setDirectApprovalMode(mode, projectID: projectID, confirmed: confirmed)
+      try await client.setDirectApprovalMode(
+        mode, projectID: projectID, confirmed: confirmed,
+        fileWritesConfirmed: fileWritesConfirmed)
       await self.refresh(silent: true, includeCatalog: false)
       self.postToast("Direct 审批策略已保存")
     }

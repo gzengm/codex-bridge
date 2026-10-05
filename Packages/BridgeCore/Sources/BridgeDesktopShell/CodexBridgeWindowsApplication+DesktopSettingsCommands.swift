@@ -15,7 +15,8 @@
         guard let mode = BridgeDesktopCommandValue.nonEmpty(payload.mode) else { return true }
         Task { @MainActor in
           await auxiliary.settings.setDirectApprovalMode(
-            mode, projectID: payload.projectID, confirmed: payload.confirmed == true)
+            mode, projectID: payload.projectID, confirmed: payload.confirmed == true,
+            fileWritesConfirmed: payload.fileWritesConfirmed == true)
         }
       case .setTaskStartApprovalMode:
         guard let mode = BridgeDesktopCommandValue.nonEmpty(payload.mode) else { return true }

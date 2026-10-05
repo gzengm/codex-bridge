@@ -90,8 +90,10 @@
       updateFullAccess();
     }, "");
     fullAccess.appendChild(fullProject.wrapper);
+    var fileWriteStatus = S.node("p", "hint");
+    fullAccess.appendChild(fileWriteStatus);
     fullAccess.appendChild(S.node("p", "hint",
-      "仅选中项目的普通已登记或内置安全 Direct 命令免审批；高风险、未登记命令及文件/路径操作仍需批准。网络已允许时，命令以当前用户权限运行，无 Bridge 进程沙箱，可访问该用户能够访问的本机文件；网络拒绝时仍使用网络隔离。命令黑名单、项目权限及外层平台限制仍生效。"));
+      "仅选中项目的普通已登记或内置安全 Direct 命令、项目内文件创建和修改免审批，支持无人值守；删除、移动、撤销、版本控制元数据文件、高风险及未登记命令仍需批准。文件操作保留路径和版本校验。网络已允许时，命令以当前用户权限运行，无 Bridge 进程沙箱，可访问该用户能够访问的本机文件；网络拒绝时仍使用网络隔离。命令黑名单、项目权限及外层平台限制仍生效。"));
     var enableFullAccess = S.button("确认启用此项目完全访问", null, {}, null, "small", true);
     enableFullAccess.addEventListener("click", function () {
       if (enableFullAccess.disabled) return;
@@ -100,7 +102,7 @@
         return item.id === projectID;
       });
       if (!project) return;
-      if (!global.confirm("为项目“" + project.title + "”启用完全访问？\n\n已登记普通命令和内置安全调用免逐次询问；高风险、未登记命令及文件/路径操作仍需批准。网络已允许时，它们以当前用户权限运行，能够读写该用户可访问的本机文件、执行程序并访问网络。网络拒绝、命令黑名单和项目权限仍强制执行；其他项目及 Agent 权限不变。")) {
+      if (!global.confirm("为项目“" + project.title + "”启用完全访问？\n\n已登记普通命令、内置安全调用，以及项目内文件创建、修改和仅含新增/修改的补丁免逐次询问，支持无人值守。删除、移动、撤销、版本控制元数据文件、高风险及未登记命令仍需批准。项目外路径、符号链接逃逸和文件版本冲突仍会被拒绝。网络已允许时，它们以当前用户权限运行，能够读写该用户可访问的本机文件、执行程序并访问网络。网络拒绝、命令黑名单和项目权限仍强制执行；其他项目及 Agent 权限不变；云端工具和平台自身的审批规则仍生效。")) {
         pendingFullAccess = false;
         direct.control.value = context.page.directApprovalMode;
         fullProject.control.value = context.page.directFullAccessProjectID || "";
@@ -108,15 +110,20 @@
         return;
       }
       pendingFullAccess = false;
-      context.emit("setDirectApprovalMode", { mode: "full-access", projectID: projectID, confirmed: true });
+      context.emit("setDirectApprovalMode", { mode: "full-access", projectID: projectID, confirmed: true, fileWritesConfirmed: true });
     });
     fullAccess.appendChild(enableFullAccess);
     function updateFullAccess() {
       fullAccess.hidden = direct.control.value !== "full-access";
       fullProject.control.disabled = !context.page.canSaveApprovalModes;
-      enableFullAccess.disabled = !context.page.canSaveApprovalModes || !fullProject.control.value
-        || (context.page.directApprovalMode === "full-access"
-          && context.page.directFullAccessProjectID === fullProject.control.value);
+      var savedFileWrites = context.page.directApprovalMode === "full-access"
+        && context.page.directFullAccessProjectID === fullProject.control.value
+        && context.page.directFullAccessFileWritesAllowed === true;
+      fileWriteStatus.textContent = savedFileWrites
+        ? "此项目内创建和修改文件已免逐次审批；删除、移动和版本控制元数据文件仍需批准。"
+        : "此项目的文件免审批尚未开启；确认启用后可无人值守创建和修改文件。";
+      enableFullAccess.disabled = !context.page.canSaveApprovalModes
+        || !fullProject.control.value || savedFileWrites;
     }
     var task = S.selectField("远程任务启动", page.taskStartApprovalMode, S.choices(page.taskStartApprovalMode, page.taskStartApprovalOptions), function (value) {
       context.emit("setTaskStartApprovalMode", { mode: value });

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 每次询问 | 按原流程逐次批准操作 | 无需网络的命令使用原有网络隔离 |
 | 自动 | 保留原有跳过 Direct 本地审批的行为 | 无需网络的命令仍使用原有网络隔离 |
-| 完全访问 | 绑定项目的已登记普通命令及受信任的安全内置调用免逐次审批；高风险、未登记命令、文件写入和路径操作仍需本地批准 | 绑定项目网络已允许时使用当前用户的普通进程；网络拒绝或调用强制隔离时仍使用网络隔离 |
+| 完全访问 | 绑定项目的已登记普通命令及受信任的安全内置调用免逐次审批；已另行明确确认的项目内文件创建、替换、编辑和仅含新增/修改的补丁免审批；高风险、未登记命令、版本控制元数据文件、删除、移动和撤销仍需本机批准 | 绑定项目网络已允许时使用当前用户的普通进程；网络拒绝或调用强制隔离时仍使用网络隔离 |
 
 审批和进程隔离分别判断。「完全访问」在 Windows 上可以使绑定项目的命令不进入 Windows AppContainer。此时命令能读取、修改当前 Windows 用户可访问的文件，也能使用该用户可使用的网络与程序。项目工作目录校验限制 Bridge 接受的请求，不能把普通 Windows 用户进程隔离在项目目录内。macOS 和 Linux 同样使用原有的普通进程路径；外层宿主、操作系统及平台的权限限制仍生效。
 
@@ -14,7 +14,7 @@
 
 黑名单、拒绝的项目读写或网络权限、项目根目录身份、工作目录边界、命令解析、可执行文件身份和调用认证仍检查。需要本地批准的项目权限不会成为免审批的许可。完全访问不自动批准高风险或未登记命令，也不覆盖已经拒绝的相同审批请求；这类操作仍需通过原有本地审批流程。已登记命令的普通风险分类应由用户审查，其参数匹配规则沿用原规则。
 
-持久化使用原有 `direct.approval_mode`（`require`、`auto`、`full-access`）和新增的 `direct.full_access_scope`。模式及绑定在同一个数据库事务中保存。缺失或损坏的完全访问绑定会拒绝操作，旧配置不需要增加绑定字段。IPC 增加可选的 `projectID`、`confirmed` 字段；旧 require/auto 请求仍可使用。
+持久化使用原有 `direct.approval_mode`（`require`、`auto`、`full-access`）和新增的 `direct.full_access_scope`。模式及绑定在同一个数据库事务中保存。缺失或损坏的完全访问绑定会拒绝操作，旧配置不需要增加绑定字段。IPC 使用可选的 `projectID`、`confirmed` 字段；项目内文件免审批还需 `fileWritesConfirmed: true`。旧 require/auto 和只确认命令完全访问的请求仍可使用。
 
 Windows 验证使用独立临时项目，不注册真实业务项目、不建立 credential、不修改真实服务设置。界面验证命令是 `node --test Scripts/tests/direct-full-access-ui.test.mjs`。Swift 验证使用与 Windows 构建相同的 SQLite、SDK、target triple 和链接参数，然后执行 `swift test --package-path Packages/BridgeCore --filter DirectFullAccessTests`。测试覆盖模式兼容、明确确认、存取与撤销、allow/deny/取消、范围和根目录身份、网络拒绝、黑名单，以及 Windows git/node 小夹具、错误、超时和停止。
 
@@ -27,3 +27,10 @@ Windows 输出收尾与历史回归同样使用独立临时项目。管道排空
 完成会话的输出缓存仍按 600 秒过期；启用持久历史时，经过原有脱敏与长度限制的摘要独立保留，仍遵守最多 128 条和文件 2 MiB 的上限。过期缓存不会删除磁盘摘要，取消操作等输出收尾后保存，原有历史 JSON 格式保持兼容。这不能复原已经被旧实现删除、且没有完整备份的历史记录。
 
 Release 回归覆盖 `WindowsPipeRegressionTests`、`DirectHistoryRegressionTests` 和 `DirectFullAccessTests`：排队读取超时后关闭、继承写管道、空输出、大块 stdout/stderr、异常退出、并发关闭、取消记录保存、缓存过期后合并新记录与重启，以及明确开启完全访问后的多次 git/node 命令。执行方式是为官方 Windows SDK 提供对应 SQLite、Testing/XCTest 和运行库路径后运行 `swift test --package-path Packages/BridgeCore -c release --filter <suite>`。生产包装不包含测试框架 DLL 或原始转储。
+
+
+文件免审批单独记入同一 `direct.full_access_scope` 的 `fileWritesAllowed` 布尔字段。缺字段的旧完全访问配置按 `false` 读取，不会在升级时扩大文件权限；新界面显示实际状态并允许原项目再次确认。此确认只影响绑定项目的普通文件创建、替换、编辑和仅含 add/update 的补丁，不免除 .git/.hg/.svn 版本控制元数据文件、删除、移动、撤销或未登记/高风险命令的审批。它也不取消云端工具或外层平台自己的审批要求。
+
+文件执行先取得工作区 lease，准备路径和文件修订，再读取当前项目权限与完全访问配置。仍强制执行根目录身份、禁止路径、符号链接/junction 逃逸保护、文件不存在/存在约束、SHA-256 修订校验及补丁上下文校验。预览操作在应用时重新核验 opt-in；已被拒绝的相同请求不能通过开启文件免审批重试成功。`每次询问`和`自动`的有效请求审批行为保持不变。
+
+`UnattendedFileWriteTests` 使用独立临时项目覆盖旧作用域与 IPC、明确确认和存取、真实创建/替换/编辑/补丁、其他项目及 require/auto、显式拒绝、版本冲突、禁止路径、项目拒绝/需审批权限、删除/移动/撤销及版本控制元数据、预览后撤权及 Windows junction 逃逸。正式安装并启用此新权限需用户看到新产物及具体影响后再次确认；现有已安装版本不会被构建或测试静默替换。

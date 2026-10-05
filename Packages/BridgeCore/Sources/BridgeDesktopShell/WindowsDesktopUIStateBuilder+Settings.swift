@@ -28,6 +28,7 @@
         directApprovalMode: settings.directApprovalMode,
         directApprovalOptions: settings.directApprovalValues.map { approvalChoice($0) },
         directFullAccessProjectID: settings.directFullAccessProjectID,
+        directFullAccessFileWritesAllowed: settings.directFullAccessFileWritesAllowed,
         directFullAccessProjectOptions: settings.directFullAccessProjectOptions,
         taskStartApprovalMode: settings.taskStartApprovalMode,
         taskStartApprovalOptions: settings.taskStartApprovalValues.map { approvalChoice($0) },

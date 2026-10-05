@@ -191,6 +191,7 @@ public struct BridgeDesktopSettingsState: Codable, Equatable, Sendable {
   public let directApprovalMode: String
   public let directApprovalOptions: [BridgeDesktopChoice]
   public let directFullAccessProjectID: String?
+  public let directFullAccessFileWritesAllowed: Bool?
   public let directFullAccessProjectOptions: [BridgeDesktopChoice]?
   public let taskStartApprovalMode: String
   public let taskStartApprovalOptions: [BridgeDesktopChoice]
@@ -229,6 +230,7 @@ public struct BridgeDesktopSettingsState: Codable, Equatable, Sendable {
     directApprovalMode: String = "require",
     directApprovalOptions: [BridgeDesktopChoice] = [],
     directFullAccessProjectID: String? = nil,
+    directFullAccessFileWritesAllowed: Bool? = nil,
     directFullAccessProjectOptions: [BridgeDesktopChoice]? = nil,
     taskStartApprovalMode: String = "require",
     taskStartApprovalOptions: [BridgeDesktopChoice] = [],
@@ -266,6 +268,7 @@ public struct BridgeDesktopSettingsState: Codable, Equatable, Sendable {
     self.directApprovalMode = directApprovalMode
     self.directApprovalOptions = directApprovalOptions
     self.directFullAccessProjectID = directFullAccessProjectID
+    self.directFullAccessFileWritesAllowed = directFullAccessFileWritesAllowed
     self.directFullAccessProjectOptions = directFullAccessProjectOptions
     self.taskStartApprovalMode = taskStartApprovalMode
     self.taskStartApprovalOptions = taskStartApprovalOptions

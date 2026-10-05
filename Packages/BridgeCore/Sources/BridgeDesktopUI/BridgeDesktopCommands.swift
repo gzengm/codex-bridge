@@ -173,6 +173,7 @@ public struct BridgeDesktopCommandPayload: Codable, Equatable, Sendable {
   public let skillNames: [String]?
   public let attachmentPaths: [String]?
   public let confirmed: Bool?
+  public let fileWritesConfirmed: Bool?
   public let offset: Int?
   public let limit: Int?
   public let qoderDistribution: String?
@@ -247,6 +248,7 @@ public struct BridgeDesktopCommandPayload: Codable, Equatable, Sendable {
     skillNames: [String]? = nil,
     attachmentPaths: [String]? = nil,
     confirmed: Bool? = nil,
+    fileWritesConfirmed: Bool? = nil,
     offset: Int? = nil,
     limit: Int? = nil,
     qoderDistribution: String? = nil,
@@ -320,6 +322,7 @@ public struct BridgeDesktopCommandPayload: Codable, Equatable, Sendable {
     self.skillNames = skillNames
     self.attachmentPaths = attachmentPaths
     self.confirmed = confirmed
+    self.fileWritesConfirmed = fileWritesConfirmed
     self.offset = offset
     self.limit = limit
     self.qoderDistribution = qoderDistribution

@@ -130,6 +130,7 @@
     var accessMode: String = "request-approval"
     var directApprovalMode: String = "require"
     var directFullAccessProjectID: String? = nil
+    var directFullAccessFileWritesAllowed: Bool = false
     var directFullAccessProjectOptions: [BridgeDesktopChoice] = []
     var taskStartApprovalMode: String = "require"
     var modelOptions: [BridgeDesktopModelOption] = []

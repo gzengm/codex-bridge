@@ -101,9 +101,18 @@ extension BridgeServiceClient {
   public func setDirectApprovalMode(
     _ mode: String, projectID: String?, confirmed: Bool
   ) async throws {
+    try await setDirectApprovalMode(
+      mode, projectID: projectID, confirmed: confirmed, fileWritesConfirmed: false)
+  }
+
+  public func setDirectApprovalMode(
+    _ mode: String, projectID: String?, confirmed: Bool, fileWritesConfirmed: Bool
+  ) async throws {
     let _: IPCMutationResponse = try await call(
       operation: .setDirectApprovalMode,
-      payload: IPCDirectApprovalModeRequest(mode: mode, projectID: projectID, confirmed: confirmed)
+      payload: IPCDirectApprovalModeRequest(
+        mode: mode, projectID: projectID, confirmed: confirmed,
+        fileWritesConfirmed: fileWritesConfirmed)
     )
   }
 

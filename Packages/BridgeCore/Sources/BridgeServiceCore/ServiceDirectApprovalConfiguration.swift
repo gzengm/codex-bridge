@@ -3,10 +3,24 @@ import Foundation
 public struct ServiceDirectFullAccessScope: Codable, Equatable, Sendable {
   public let projectID: String
   public let root: ServiceRootIdentity
+  public let fileWritesAllowed: Bool
 
-  public init(projectID: String, root: ServiceRootIdentity) {
+  public init(projectID: String, root: ServiceRootIdentity, fileWritesAllowed: Bool = false) {
     self.projectID = projectID
     self.root = root
+    self.fileWritesAllowed = fileWritesAllowed
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case projectID, root, fileWritesAllowed
+  }
+
+  public init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    projectID = try values.decode(String.self, forKey: .projectID)
+    root = try values.decode(ServiceRootIdentity.self, forKey: .root)
+    // 旧版完全访问只授权命令，不在升级时自动扩大文件权限。
+    fileWritesAllowed = try values.decodeIfPresent(Bool.self, forKey: .fileWritesAllowed) ?? false
   }
 
   public func matches(_ project: ServiceProjectRecord) -> Bool {
@@ -30,6 +44,10 @@ public struct ServiceDirectApprovalConfiguration: Equatable, Sendable {
 
   public func hasFullAccess(for project: ServiceProjectRecord) -> Bool {
     mode == .fullAccess && fullAccessScope?.matches(project) == true
+  }
+
+  public func hasFullAccessFileWrites(for project: ServiceProjectRecord) -> Bool {
+    hasFullAccess(for: project) && fullAccessScope?.fileWritesAllowed == true
   }
 
   public func commandDeniesNetwork(

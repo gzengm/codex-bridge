@@ -237,8 +237,12 @@ public actor ServiceSettings {
   public func setDirectApprovalMode(
     _ mode: ServiceDirectApprovalMode,
     fullAccessProject: ServiceProjectRecord? = nil,
-    confirmed: Bool = false
+    confirmed: Bool = false,
+    fileWritesConfirmed: Bool = false
   ) async throws {
+    guard !fileWritesConfirmed || mode == .fullAccess else {
+      throw ServiceStoreError.invalidArgument("文件免审批需要明确选择完全访问项目。")
+    }
     let scopeJSON: String
     if mode == .fullAccess {
       guard confirmed, let project = fullAccessProject,
@@ -248,7 +252,8 @@ public actor ServiceSettings {
         throw ServiceStoreError.invalidArgument("完全访问需要明确确认并选择允许读写和命令的项目。")
       }
       try project.root.validateCurrentIdentity()
-      let scope = ServiceDirectFullAccessScope(projectID: project.id.rawValue, root: project.root)
+      let scope = ServiceDirectFullAccessScope(
+        projectID: project.id.rawValue, root: project.root, fileWritesAllowed: fileWritesConfirmed)
       scopeJSON = String(decoding: try JSONEncoder().encode(scope), as: UTF8.self)
     } else {
       scopeJSON = ""

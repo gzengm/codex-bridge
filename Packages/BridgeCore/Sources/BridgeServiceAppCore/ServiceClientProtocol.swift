@@ -171,6 +171,9 @@ public protocol BridgeServiceClientProtocol: BridgeTaskConversationClient, Senda
   func setDirectApprovalMode(_ mode: String) async throws
   func directApprovalConfiguration() async throws -> IPCDirectApprovalModeResponse
   func setDirectApprovalMode(_ mode: String, projectID: String?, confirmed: Bool) async throws
+  func setDirectApprovalMode(
+    _ mode: String, projectID: String?, confirmed: Bool, fileWritesConfirmed: Bool
+  ) async throws
   func taskStartApprovalMode() async throws -> String
   func setTaskStartApprovalMode(_ mode: String) async throws
   func setExposureMode(_ mode: MCPServiceExposureMode) async throws
@@ -201,6 +204,13 @@ extension BridgeServiceClient: BridgeServiceClientProtocol {
 }
 
 extension BridgeServiceClientProtocol {
+  public func setDirectApprovalMode(
+    _ mode: String, projectID: String?, confirmed: Bool, fileWritesConfirmed: Bool
+  ) async throws {
+    guard !fileWritesConfirmed else { throw BridgeServiceClientError.unavailable }
+    try await setDirectApprovalMode(mode, projectID: projectID, confirmed: confirmed)
+  }
+
   public func manageAgentNativeSessionDirectory(
     _: MCPNativeSessionDirectoryRequest
   ) async throws -> MCPNativeSessionDirectoryResponse {
