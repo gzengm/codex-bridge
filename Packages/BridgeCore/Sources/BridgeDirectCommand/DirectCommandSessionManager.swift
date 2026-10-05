@@ -78,6 +78,7 @@ public actor DirectCommandSessionManager {
   private let executionEnvironment: DirectExecutionEnvironmentCapabilities
   private let historyFileURL: URL?
   private var sessions: [String: DirectCommandSession] = [:]
+  private var archivedSessions: [String: DirectCommandSession] = [:]
   private var outputCollectors: [String: DirectCommandOutputCollector] = [:]
   private var completedSessionAccess: [String: Date] = [:]
   private var activeProjectSession: [String: String] = [:]
@@ -110,6 +111,7 @@ public actor DirectCommandSessionManager {
       restored.map { ($0.sessionID, $0) },
       uniquingKeysWith: { _, newest in newest }
     )
+    self.archivedSessions = self.sessions
     self.completedSessionAccess = Dictionary(
       restored.map { ($0.sessionID, Date()) },
       uniquingKeysWith: { _, newest in newest }
@@ -146,7 +148,8 @@ public actor DirectCommandSessionManager {
   ) -> [DirectCommandSession] {
     pruneCompletedSessions()
     guard limit > 0 else { return [] }
-    return sessions.values
+    let history = archivedSessions.merging(sessions) { _, current in current }
+    return history.values
       .filter { projectID == nil || $0.projectID == projectID }
       .sorted { $0.startedAt > $1.startedAt }
       .prefix(limit)
@@ -192,7 +195,9 @@ public actor DirectCommandSessionManager {
   ) async throws -> DirectCommandSession {
     pruneCompletedSessions()
     guard !shutdown else { throw DirectCommandSessionError.notRunning }
-    guard sessions[sessionID] == nil else { throw DirectCommandSessionError.sessionNotFound }
+    guard sessions[sessionID] == nil, archivedSessions[sessionID] == nil else {
+      throw DirectCommandSessionError.sessionNotFound
+    }
     guard activeProjectSession[projectID.rawValue] == nil else {
       throw DirectCommandSessionError.projectBusy
     }
@@ -343,9 +348,19 @@ public actor DirectCommandSessionManager {
       }
       untrackPID(sessionID: sessionID)
     }
-    for task in taskHandles.values {
-      task.cancel()
+    let monitoringTasks = Array(taskHandles.values)
+    for task in monitoringTasks { task.cancel() }
+    for task in monitoringTasks { await task.value }
+    // 等待输出收尾后保存取消摘要，重启后仍能查看已完成的取消操作。
+    for sessionID in active.keys {
+      guard let session = sessions[sessionID], session.status == "running" else { continue }
+      sessions[sessionID] = DirectCommandSession(
+        sessionID: sessionID, projectID: session.projectID, argv: session.argv,
+        workingDirectory: session.workingDirectory, startedAt: session.startedAt,
+        status: "cancelled", output: outputCollectors[sessionID]?.snapshot() ?? session.output,
+        processID: nil, executionEnvironment: session.executionEnvironment, endedAt: Date())
     }
+    persistHistory()
     activeProjectSession = [:]
     taskHandles.removeAll()
     processes.removeAll()
@@ -454,8 +469,19 @@ public actor DirectCommandSessionManager {
   }
 
   private func persistHistory() {
+    guard historyFileURL != nil else { return }
+    // 历史摘要独立于短期输出缓存，缓存过期不能删除已经保存的会话。
+    for session in sessions.values where session.status != "running" {
+      if let archived = DirectCommandSessionHistoryRecord(session: session).session() {
+        archivedSessions[session.sessionID] = archived
+      }
+    }
+    let bounded = archivedSessions.values.sorted { $0.startedAt > $1.startedAt }
+      .prefix(maximumCompletedSessions)
+    archivedSessions = Dictionary(
+      bounded.map { ($0.sessionID, $0) }, uniquingKeysWith: { _, new in new })
     DirectCommandSessionHistory.save(
-      sessions.values,
+      archivedSessions.values,
       to: historyFileURL,
       maximumCount: maximumCompletedSessions
     )

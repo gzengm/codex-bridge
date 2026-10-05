@@ -285,7 +285,7 @@ let package = Package(
       dependencies: [
         "BridgeServiceApplication", "BridgeServiceCore", "BridgeDirectCommand",
         "BridgeDesktopUI", "BridgeIPC", "BridgeProjects", "BridgeDomain",
-        "BridgeCodexService", "BridgeCodexRPC", "BridgeMCP",
+        "BridgeCodexService", "BridgeCodexRPC", "BridgeMCP", "BridgeProcess",
       ]
     ),
     .target(name: "BridgeProcess"),

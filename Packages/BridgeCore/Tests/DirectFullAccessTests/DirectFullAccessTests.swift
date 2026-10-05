@@ -313,6 +313,28 @@ struct DirectFullAccessTests {
       }
     }
 
+    @Test func windowsFullAccessRepeatedGitNodeCommandsRemainResponsive() async throws {
+      let fixture = try await Fixture.make()
+      defer { fixture.cleanup() }
+      try await fixture.enableFullAccess()
+      let manager = await fixture.application.directCommands
+      let baseline = try processHandleCount()
+      for _ in 0..<25 {
+        for executable in ["git", "node"] {
+          let receipt = try await fixture.application.serviceDirectExecCommand(
+            .init(
+              projectID: fixture.first.id.rawValue, argv: [executable, "--version"],
+              yieldTimeMS: 1000, timeoutMS: 5000),
+            deadline: ContinuousClock.now.advanced(by: .seconds(10)))
+          let session = try await finishedSession(manager, id: receipt.sessionID)
+          #expect(session.exitCode == 0 && session.output.byteCount > 0 && !session.timedOut)
+          #expect(session.executionEnvironment.childNetworkPolicy == "inherited")
+          #expect(!(await manager.isBusy(projectID: fixture.first.id)))
+        }
+      }
+      #expect(try processHandleCount() <= baseline + 12)
+    }
+
     @Test func windowsRequireAutoAndFullAccessNetworkDenialThroughService() async throws {
       let fixture = try await Fixture.make()
       defer { fixture.cleanup() }

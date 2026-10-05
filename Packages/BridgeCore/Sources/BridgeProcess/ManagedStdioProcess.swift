@@ -373,11 +373,12 @@ public final class ManagedStdioProcess: @unchecked Sendable {
       return
     }
     handlesClosed = true
+    outputLock.unlock()
+    // Foundation 的关闭会等待回调队列，不能同时持有回调需要的输出锁。
     standardOutputHandle.readabilityHandler = nil
     standardErrorHandle?.readabilityHandler = nil
-    standardOutputHandle.closeFile()
-    standardErrorHandle?.closeFile()
-    outputLock.unlock()
+    try? standardOutputHandle.close()
+    try? standardErrorHandle?.close()
     closeStdin()
     #if os(Windows)
       lock.lock()
@@ -395,7 +396,12 @@ public final class ManagedStdioProcess: @unchecked Sendable {
     outputLock.lock()
     defer { outputLock.unlock() }
     guard !handlesClosed else { return }
-    let data = handle.availableData
+    #if os(Windows)
+      guard let data = readWindowsPipe(handle) else { return }
+      if data.isEmpty { handle.readabilityHandler = nil }
+    #else
+      let data = handle.availableData
+    #endif
     if !data.isEmpty { sink(data) }
   }
 
@@ -433,25 +439,32 @@ public final class ManagedStdioProcess: @unchecked Sendable {
         return Data()
       }
       return nil
-    #else
-      let result = BlockingReadResult()
-      nonisolated(unsafe) let unsafeHandle = handle
-      DispatchQueue.global(qos: .utility).async {
-        result.set(unsafeHandle.availableData)
+    #elseif os(Windows)
+      while ContinuousClock.now < deadline {
+        outputLock.lock()
+        guard !handlesClosed else {
+          outputLock.unlock()
+          return Data()
+        }
+        let data = readWindowsPipe(handle)
+        outputLock.unlock()
+        if let data { return data }
+        Thread.sleep(forTimeInterval: 0.005)
       }
-      let remaining = max(1, Self.milliseconds(until: deadline))
-      guard result.wait(milliseconds: remaining) else { return nil }
-      return result.value
+      return nil
     #endif
   }
 
-  private static func milliseconds(until deadline: ContinuousClock.Instant) -> Int {
-    let remaining = ContinuousClock.now.duration(to: deadline).components
-    let seconds = max(0, remaining.seconds)
-    let milliseconds = seconds.multipliedReportingOverflow(by: 1_000).partialValue
-    let nanos = max(0, remaining.attoseconds / 1_000_000_000_000_000)
-    return Int(min(Int64.max, milliseconds + nanos))
-  }
+  #if os(Windows)
+    // 在输出锁内先确认可读字节，避免超时后遗留阻塞读线程与关闭操作竞争。
+    private func readWindowsPipe(_ handle: FileHandle) -> Data? {
+      var available: DWORD = 0
+      guard PeekNamedPipe(handle._handle, nil, 0, nil, &available, nil) else { return Data() }
+      guard available > 0 else { return nil }
+      // 使用可抛错的读取 API，关闭管道时不会触发 availableData 的致命错误。
+      return (try? handle.read(upToCount: min(Int(available), 16 * 1_024))) ?? Data()
+    }
+  #endif
 
   private func reapIfExitedLocked() -> ManagedProcessTermination? {
     if let terminationStorage { return terminationStorage }
@@ -495,29 +508,4 @@ public final class ManagedStdioProcess: @unchecked Sendable {
   private let systemWaitPID = Glibc.waitpid
   private let systemWrite = Glibc.write
   private let systemRead = Glibc.read
-#endif
-
-#if os(Windows)
-  private final class BlockingReadResult: @unchecked Sendable {
-    private let semaphore = DispatchSemaphore(value: 0)
-    private let lock = NSLock()
-    private var storage: Data?
-
-    var value: Data? {
-      lock.lock()
-      defer { lock.unlock() }
-      return storage
-    }
-
-    func set(_ value: Data) {
-      lock.lock()
-      storage = value
-      lock.unlock()
-      semaphore.signal()
-    }
-
-    func wait(milliseconds: Int) -> Bool {
-      semaphore.wait(timeout: .now() + .milliseconds(milliseconds)) == .success
-    }
-  }
 #endif

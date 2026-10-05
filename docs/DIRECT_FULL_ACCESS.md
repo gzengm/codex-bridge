@@ -21,3 +21,9 @@ Windows 验证使用独立临时项目，不注册真实业务项目、不建立
 完全访问不是对旧命令超时原因的判断。旧自动模式只改变 Bridge 本地审批，并不取消 Windows AppContainer。应使用实际日志和受控小夹具单独诊断进程创建、运行、输出收集及清理问题，保留原日志；不能以关闭隔离后能够运行为依据，宣称旧隔离故障已经修复。
 
 在本机独立 Win32 探针中，旧代码的 51 字符 AppContainer 名称返回 `0x80070057`；同样的名称前缀在 43、48、49、50 字符时成功，51、52、63、64 字符时失败。现将前缀缩短为 `CodexBridge.`，保留完整 UUID，名称为 44 字符，原有 AppContainer、网络隔离和清理逻辑不变。修复后，小夹具中的隔离 git/node 以及通过 Service 的每次询问、自动和完全访问网络拒绝测试均通过。这证明修复了该参数错误，尚不能证明此前真实项目的长时间无输出已全部解决。
+
+Windows 输出收尾与历史回归同样使用独立临时项目。管道排空先检查已有字节并在输出锁内有界读取，不再派发可能在超时后继续访问已关闭句柄的阻塞读取任务。关闭句柄前释放输出锁，避免 Foundation 等待回调队列时发生锁等待。
+
+完成会话的输出缓存仍按 600 秒过期；启用持久历史时，经过原有脱敏与长度限制的摘要独立保留，仍遵守最多 128 条和文件 2 MiB 的上限。过期缓存不会删除磁盘摘要，取消操作等输出收尾后保存，原有历史 JSON 格式保持兼容。这不能复原已经被旧实现删除、且没有完整备份的历史记录。
+
+Release 回归覆盖 `WindowsPipeRegressionTests`、`DirectHistoryRegressionTests` 和 `DirectFullAccessTests`：排队读取超时后关闭、继承写管道、空输出、大块 stdout/stderr、异常退出、并发关闭、取消记录保存、缓存过期后合并新记录与重启，以及明确开启完全访问后的多次 git/node 命令。执行方式是为官方 Windows SDK 提供对应 SQLite、Testing/XCTest 和运行库路径后运行 `swift test --package-path Packages/BridgeCore -c release --filter <suite>`。生产包装不包含测试框架 DLL 或原始转储。
